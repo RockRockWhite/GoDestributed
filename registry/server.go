@@ -1,7 +1,9 @@
 package registry
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -12,14 +14,15 @@ const ServicesUrl = "http://localhost" + ServerPort + "/services"
 
 type registry struct {
 	registration []Registration
-	mutex        *sync.Mutex
+	mutex        *sync.RWMutex
 }
 
 func (r *registry) add(reg Registration) error {
 	r.mutex.Lock()
 	r.registration = append(r.registration, reg)
 	r.mutex.Unlock()
-	return nil
+	err := r.sendRequiredServices(reg)
+	return err
 }
 
 func (r *registry) remove(url string) error {
@@ -36,9 +39,49 @@ func (r *registry) remove(url string) error {
 	return nil
 }
 
+func (r *registry) sendRequiredServices(registration Registration) error {
+	// 读操作上锁
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	var p patch
+	for _, serviceReg := range r.registration {
+		for _, requireService := range registration.RequiredServices {
+			if requireService == serviceReg.ServiceName {
+				p.Added = append(p.Added, patchEntry{
+					ServiceName: serviceReg.ServiceName,
+					Url:         serviceReg.ServiceUrl,
+				})
+			}
+		}
+	}
+	// 把信息发给注册的服务
+	err := r.sendPatch(registration.ServiceUpdateUrl, p)
+	if err != nil {
+		log.Println(err)
+	}
+	return nil
+}
+
+func (r *registry) sendPatch(url string, p patch) interface{} {
+	d, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	res, err := http.Post(url, "application/json", bytes.NewBuffer(d))
+	if err != nil {
+		return err
+	}
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("send patch with error code %s", res.Status)
+	}
+
+	return nil
+}
+
 var reg = &registry{
 	registration: make([]Registration, 0),
-	mutex:        &sync.Mutex{},
+	mutex:        &sync.RWMutex{},
 }
 
 type RegistyService struct {

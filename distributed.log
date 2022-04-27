@@ -1,3 +1,15 @@
 go2022/04/24 17:48:14 记录一条log
 go 2022/04/24 17:49:00 记录一条log
 go 2022/04/25 17:01:11 记录一条log
+go 2022/04/27 21:42:57 [LogService] -Logging service found at!!! http://localhost:3002
+
+go 2022/04/27 21:44:40 [LogService] -Logging service found at!!! http://localhost:3002
+
+go 2022/04/27 21:44:41 [LogService] -Request received
+
+go 2022/04/27 21:44:41 [LogService] -Request received
+
+go 2022/04/27 21:44:42 [LogService] -Request received
+
+go 2022/04/27 21:44:42 [LogService] -Request received
+
