@@ -27,6 +27,7 @@ func RegisterService(r Registration) error {
 			}
 
 			prov.Update(p)
+			fmt.Printf("收到服务更新操作%+v\n", p)
 
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)

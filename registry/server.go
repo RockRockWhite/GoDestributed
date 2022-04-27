@@ -22,20 +22,40 @@ func (r *registry) add(reg Registration) error {
 	r.registration = append(r.registration, reg)
 	r.mutex.Unlock()
 	err := r.sendRequiredServices(reg)
+
+	// 通知依赖这个服务的服务
+	r.notify(patch{
+		Added: []patchEntry{
+			{
+				ServiceName: reg.ServiceName,
+				Url:         reg.ServiceUrl,
+			},
+		},
+	})
 	return err
 }
 
 func (r *registry) remove(url string) error {
-	r.mutex.Lock()
 	// 移除元素
 	for i, each := range r.registration {
 		if each.ServiceUrl == url {
+			// 此处锁的使用待考虑
+			r.mutex.Lock()
 			r.registration = append(r.registration[:i], r.registration[i+1:]...)
+			r.mutex.Unlock()
+			// 通知依赖这个服务的服务
+			r.notify(patch{
+				Removed: []patchEntry{
+					{
+						ServiceName: each.ServiceName,
+						Url:         each.ServiceUrl,
+					},
+				},
+			})
 			break
 		}
 	}
 
-	r.mutex.Unlock()
 	return nil
 }
 
@@ -63,7 +83,7 @@ func (r *registry) sendRequiredServices(registration Registration) error {
 	return nil
 }
 
-func (r *registry) sendPatch(url string, p patch) interface{} {
+func (r *registry) sendPatch(url string, p patch) error {
 	d, err := json.Marshal(p)
 	if err != nil {
 		return err
@@ -77,6 +97,47 @@ func (r *registry) sendPatch(url string, p patch) interface{} {
 	}
 
 	return nil
+}
+
+func (r *registry) notify(fullPatch patch) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	for _, reg := range r.registration {
+		// 并发操作每个reg
+		go func(reg Registration) {
+			for _, reqService := range reg.RequiredServices {
+				p := patch{
+					Added:   []patchEntry{},
+					Removed: []patchEntry{},
+				}
+				sendUpdate := false
+				for _, added := range fullPatch.Added {
+					if added.ServiceName == reqService {
+						p.Added = append(p.Added, added)
+						sendUpdate = true
+					}
+				}
+
+				for _, removed := range fullPatch.Removed {
+					if removed.ServiceName == reqService {
+						p.Removed = append(p.Removed, removed)
+						sendUpdate = true
+						fmt.Println("removed")
+					}
+				}
+
+				if sendUpdate {
+					err := r.sendPatch(reg.ServiceUpdateUrl, p)
+					if err != nil {
+						return
+					}
+				}
+
+			}
+		}(reg)
+	}
+
 }
 
 var reg = &registry{
