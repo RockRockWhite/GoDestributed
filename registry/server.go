@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 )
 
 const ServerPort = ":3001"
@@ -138,6 +139,50 @@ func (r *registry) notify(fullPatch patch) {
 		}(reg)
 	}
 
+}
+
+func (r *registry) heartbeat(freq time.Duration) {
+	for {
+		var wg sync.WaitGroup
+		for _, reg := range r.registration {
+			wg.Add(1)
+			go func(reg Registration) {
+				defer wg.Done()
+				success := true
+				for attemp := 0; attemp < 3; attemp++ {
+					res, err := http.Get(reg.HeartbeatUrl)
+					if err != nil {
+						log.Println(err)
+					} else if res.StatusCode == http.StatusOK {
+						log.Printf("heartbeat checked %v \n", reg.ServiceName)
+						// 原先服务断开, 现在尝试重连接
+						if !success {
+							r.add(reg)
+						}
+						break
+					}
+					log.Printf("Heartbeat failed %v \n", reg.ServiceName)
+					if success {
+						success = false
+						// 移除服务
+						r.remove(reg.ServiceUrl)
+					}
+					time.Sleep(freq)
+
+				}
+			}(reg)
+			wg.Wait()
+			time.Sleep(freq)
+		}
+	}
+}
+
+var once sync.Once
+
+func SetupRegistryService() {
+	once.Do(func() {
+		go reg.heartbeat(3 * time.Second)
+	})
 }
 
 var reg = &registry{

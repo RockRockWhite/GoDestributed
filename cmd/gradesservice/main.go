@@ -20,6 +20,7 @@ func main() {
 			"LogService",
 		},
 		ServiceUpdateUrl: fmt.Sprintf("http://%s:%s", host, port) + "/services",
+		HeartbeatUrl:     fmt.Sprintf("http://%s:%s", host, port) + "/heartbeat",
 	})
 
 	if err != nil {

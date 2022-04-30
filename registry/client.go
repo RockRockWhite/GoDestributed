@@ -35,6 +35,21 @@ func RegisterService(r Registration) error {
 		}
 	})
 
+	// 相应心跳包
+	heartbeatUrl, err := url.Parse(r.HeartbeatUrl)
+	if err != nil {
+		return err
+	}
+	http.HandleFunc(heartbeatUrl.Path, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+	})
+
 	buf := bytes.Buffer{}
 	enc := json.NewEncoder(&buf)
 	err = enc.Encode(r)
